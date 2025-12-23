@@ -1,0 +1,17 @@
+# Environment variables
+.env
+
+# License file (contains sensitive subscription information)
+license.lic
+
+# Custom scripts (may contain sensitive data)
+custom-init-scripts/
+custom-config-scripts/
+
+# Logs
+logs/
+*.log
+
+# OS specific files
+.DS_Store
+Thumbs.db

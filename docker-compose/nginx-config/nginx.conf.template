@@ -1,0 +1,292 @@
+# Events block: handles settings for connection processing.
+events {
+    # Empty block; uses default settings.
+}
+
+# HTTP block: encloses all HTTP server-specific configuration.
+http {
+    # log_format directive: Defines a custom logging format named 'upstream_logging'.
+    log_format upstream_logging escape=json
+    '{'
+      '"http.url":"$request_uri",'
+      '"http.version":"$server_protocol",'
+      '"http.status_code":$status,'
+      '"http.method":"$request_method",'
+      '"http.referer":"$http_referer",'
+      '"http.useragent":"$http_user_agent",'
+      '"time_local":"$time_local",'
+      '"remote_addr":"$remote_addr",'
+      '"remote_user":"$remote_user",'
+      '"dest_upstream_addr":"$upstream_addr",'
+      '"request_time":$request_time,'
+      '"request":"$request",'
+      '"body_bytes_sent":"$body_bytes_sent",'
+      '"response_content_type":"$sent_http_content_type",'
+      '"X-Forwarded-For":"$proxy_add_x_forwarded_for",'
+      '"X-Forwarded-Proto":"$preserve_x_forwarded_proto",'
+      '"X-Forwarded-Host":"$preserve_x_forwarded_host",'
+      '"X-Forwarded-Port":"$preserve_x_forwarded_port"'
+    '}';
+
+    # Sets the maximum allowed size for client request bodies.
+    client_max_body_size ${APPSMITH_CODEC_SIZE};
+
+    # Create variable for conditional logging to exclude requests with HTTP status codes 2xx (Success) and 3xx (Redirection)
+    map $status $loggable {
+        ~^[23]  ${NGINX_ACCESS_LOG_ALL};
+        default 1;
+    }
+
+    # map directive: Maps the original X-Forwarded-Proto header to a new variable.
+    # the current $scheme is used when the header is not present
+    map $http_x_forwarded_proto $preserve_x_forwarded_proto {
+        default $http_x_forwarded_proto;
+        '' $scheme;
+    }
+
+    # map directive: Maps the original X-Forwarded-Host header to a new variable.
+    # the current $host is used when the header is not present
+    map $http_x_forwarded_host $preserve_x_forwarded_host {
+        default $http_x_forwarded_host;
+        '' $host;
+    }
+
+    # map directive: Maps the original X-Forwarded-Port header to a new variable.
+    # the current $server_port is used when the header is not present
+    map $http_x_forwarded_port $preserve_x_forwarded_port {
+        default $http_x_forwarded_port;
+        '' $server_port;
+    }
+
+    # map directive: Maps the original request URI to a new variable, intended to be URL-encoded.
+    # Here, it simply captures and stores the URI without encoding.
+    map $request_uri $encoded_uri {
+        ~^(.*)$ $1;  # Regex captures the entire request URI and assigns it to $encoded_uri.
+    }
+
+    # map directive: Maps the original set cookie header to a new variable, intended to extract the JSESSIONID.
+    # the default empty string is used to avoid setting the cookie header when the header is not present.
+    map $set_cookie_header $jsessionid_cookie_value {
+        ~*^(?:.+)?JSESSIONID=([^,]+)(?:.+)?$ "JSESSIONID=$1";
+        default "";
+    }
+
+    # map directive: Maps the original set cookie header to a new variable, intended to extract the X-Bonita-API-Token.
+    # the default empty string is used to avoid setting the cookie header when the header is not present.
+    map $set_cookie_header $apitoken_cookie_value {
+        ~*^(?:.+)?X-Bonita-API-Token=([^,]+)(?:.+)?$ "X-Bonita-API-Token=$1";
+        default "";
+    }
+
+    # map directive: Maps the app URI querystring, intended to select the auth request service.
+    # If signin=true is present in the querystring as we don't want the guestuser to be logged in automatically.
+    map $app_uri_query_params $auth_request_service {
+        ~*^(?:.+)?signin=true(?:.+)?$ "API/system/session";
+        default "guestservice";
+    }
+
+    # map directive: Maps the app URI querystring, intended to select the auth request method.
+    # guestservice requires a POST request, while API/system/session requires a GET request.
+    map $app_uri_query_params $auth_request_method {
+        ~*^(?:.+)?signin=true(?:.+)?$ "GET";
+        default "POST";
+    }
+
+    # upstream directive: Defines a group of servers that can handle requests for bonita_runtime.
+    # HIGH AVAILABILITY MODE: Load balancing between multiple Bonita Runtime instances
+    upstream bonita_runtime {
+        # Load balancing strategy: ip_hash for sticky sessions
+        # This ensures requests from the same client always go to the same backend
+        # Alternative strategies: least_conn (least connections), round_robin (default)
+        ip_hash;
+
+        # Backend server 1
+        server bonita-runtime-1:8080 max_fails=3 fail_timeout=30s;
+
+        # Backend server 2
+        server bonita-runtime-2:8080 max_fails=3 fail_timeout=30s;
+
+        # Health check parameters:
+        # - max_fails: Number of failed attempts before marking server as down
+        # - fail_timeout: Time to wait before retrying a failed server
+
+        # Note: For single instance mode, comment out one of the servers above
+        # or use the original single-server configuration
+    }
+
+    # upstream directive for Appsmith: Sets up another group of servers for handling requests.
+    upstream appsmith {
+        server ${UIB_HOST}:${UIB_PORT}; # Specifies a server and port for the Appsmith application.
+    }
+
+    log_subrequest on;  # Enables logging of subrequests.
+
+    server {
+        listen 90;  # Listen on port 90 for internal checks like nginx_status
+
+        location /nginx_status {
+            stub_status;  # Enable stub_status for NGINX health checks
+            access_log off;  # Disable access log for this endpoint
+        }
+
+    }
+
+    # Server block: Starts configuration for a server listening on a specific port.
+    server {
+        root /usr/share/nginx/html;  # root directive: Sets the root directory for the server.
+        listen ${NGINX_LISTEN_ADDRESS}; # listen directive: Sets the server port to listen on for incoming connections.
+        include snippets/https.conf;  # include directive: Includes the https and certificate configuration.
+        access_log /var/log/nginx/access.log upstream_logging if=$loggable;  # access_log directive: Specifies the path for the access log.
+        error_log /var/log/nginx/error.log ${NGINX_ERROR_LOG_LEVEL};  # error_log directive: Specifies the path and level for the error log.
+        error_page 500 502 503 504 =503 /5xx.html; # error page for proxy level errors (since proxy_intercept_errors is off, upstream services respond with their own error pages when they are available)
+        proxy_send_timeout ${PROXY_SEND_TIMEOUT}; # maximum time to wait for the server to respond
+        proxy_read_timeout ${PROXY_READ_TIMEOUT}; # time allowed to receive the entire response once the server started sending it
+
+        # Location block for Bonita session endpoint; used for internal subrequests made by Bonita datasource and cookie validation filter.
+        location = /bonita/API/system/session {
+            internal;  # Marks this location as usable only for internal requests.
+            proxy_pass http://bonita_runtime/bonita/API/system/session/unusedId;  # proxy_pass directive: Forwards requests to the authentication service.
+            proxy_set_header Content-Length "";  # Clears the Content-Length header before forwarding.
+            proxy_set_header Accept application/json;  # Sets the Accept header to JSON. Mandatory with SSO as it allows to get a 401 when unauthentified instead of 302 to login page.
+            proxy_http_version 1.1;  # Sets the HTTP version used in the proxy request.
+            proxy_set_header Host $host;  # Sets the Host header to the host of the incoming request.
+            proxy_set_header X-Real-IP $remote_addr;  # Passes the real IP of the client to the proxied server.
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;  # Appends the client's IP to X-Forwarded-For header.
+            proxy_set_header X-Forwarded-Proto $preserve_x_forwarded_proto;  # Forwards the original request scheme.
+            proxy_set_header X-Forwarded-Host $preserve_x_forwarded_host;  # Forwards the original host requested.
+            proxy_set_header X-Forwarded-Port $preserve_x_forwarded_port;  # Forwards the original port requested.
+            proxy_set_header Cookie $http_cookie;  # Forwards any cookies from the client.
+        }
+
+        # Location block that proxies requests to the Bonita runtime service.
+        location /bonita/ {
+            proxy_pass http://bonita_runtime;  # Proxies requests to the defined upstream group bonita_runtime.
+            proxy_http_version 1.1;  # Sets the HTTP version used in the proxy request.
+            proxy_set_header Host $host;  # Sets the Host header.
+            proxy_set_header X-Real-IP $remote_addr;  # Passes the real IP address of the client.
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;  # Appends the client's IP to X-Forwarded-For header.
+            proxy_set_header X-Forwarded-Proto $preserve_x_forwarded_proto;  # Forwards the original request scheme.
+            proxy_set_header X-Forwarded-Host $preserve_x_forwarded_host;  # Forwards the original host requested.
+            proxy_set_header X-Forwarded-Port $preserve_x_forwarded_port;  # Forwards the original port requested.
+            include snippets/cookies.conf; # Modifies the cookie path to remove '/bonita'.
+        }
+
+        # Location block for handling logout requests.
+        location /bonita/sessionLogout {
+            proxy_pass http://bonita_runtime/bonita/logoutservice?redirect=true&$args;  # proxy_pass directive: Forwards requests to the authentication service.
+            proxy_http_version 1.1;  # Sets the HTTP version used in the proxy request.
+            proxy_set_header Host $host;  # Sets the Host header.
+            proxy_set_header X-Real-IP $remote_addr;  # Passes the real IP address of the client.
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;  # Appends the client's IP to X-Forwarded-For header.
+            proxy_set_header X-Forwarded-Proto $preserve_x_forwarded_proto;  # Forwards the original request scheme.
+            proxy_set_header X-Forwarded-Host $preserve_x_forwarded_host;  # Forwards the original host requested.
+            proxy_set_header X-Forwarded-Port $preserve_x_forwarded_port;  # Forwards the original port requested.
+            include snippets/cookies.conf; # Modifies the cookie path to remove '/bonita'.
+        }
+
+        # Location block for handling api requests.
+        location ~* ^/(api|uib|libraries)/(.*) {
+            proxy_pass http://appsmith/$1/$2$is_args$args;  # Proxies requests to the Appsmith application.
+            proxy_http_version 1.1;  # Sets the HTTP version used in the proxy request.
+            proxy_set_header Host $host;  # Forwards the Host header.
+            proxy_set_header X-Real-IP $remote_addr;  # Forwards the real IP address.
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;  # Appends the client's IP to X-Forwarded-For header.
+            proxy_set_header X-Forwarded-Proto $preserve_x_forwarded_proto;  # Forwards the original request scheme.
+            proxy_set_header X-Forwarded-Host $preserve_x_forwarded_host;  # Forwards the original host requested.
+            proxy_set_header X-Forwarded-Port $preserve_x_forwarded_port;  # Forwards the original port requested.
+            proxy_set_header Upgrade $http_upgrade;  # Handles protocols upgrades, e.g., for WebSocket.
+            proxy_set_header Connection "upgrade";  # Maintains upgrade header connections.
+        }
+
+        # Location block for handling app requests.
+        location ~* ^/app/([^?/#]+) {
+            set $appsmith_app $1;
+            set $app_uri_query_params $args;
+            auth_request /bonita/authservice;  # auth_request directive: Makes a subrequest to authenticate the request.
+            # this gets called right after auth_request returns.
+            # it reads http "Set-Cookie" header from upstream (= auth_request)
+            # and sets it to the variable $set_cookie_header
+            auth_request_set $set_cookie_header $sent_http_set_cookie;
+            add_header Set-Cookie $jsessionid_cookie_value;  # Adds the Set-Cookie header to the response.
+            add_header Set-Cookie $apitoken_cookie_value;  # Adds the Set-Cookie header to the response.
+            add_header Cache-Control "no-store";  # Prevent the response from being cached as cookies may have changed.
+            error_page 401 = @redirect_to_login;  # Defines a custom error page for 401 Unauthorized responses.
+            error_page 500 502 503 504 =503 /5xx.html; # error page for auth and proxy level errors (needs to be repeated since global conf does not apply as soon as an error_page is defined in a location)
+            proxy_pass http://appsmith/app/$appsmith_app;  # Proxies requests to the Appsmith application.
+            proxy_http_version 1.1;  # Sets the HTTP version used in the proxy request.
+            proxy_set_header Host $host;  # Forwards the Host header.
+            proxy_set_header X-Real-IP $remote_addr;  # Forwards the real IP address.
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;  # Appends the client's IP to X-Forwarded-For header.
+            proxy_set_header X-Forwarded-Proto $preserve_x_forwarded_proto;  # Forwards the original request scheme.
+            proxy_set_header X-Forwarded-Host $preserve_x_forwarded_host;  # Forwards the original host requested.
+            proxy_set_header X-Forwarded-Port $preserve_x_forwarded_port;  # Forwards the original port requested.
+            proxy_set_header Upgrade $http_upgrade;  # Handles protocols upgrades, e.g., for WebSocket.
+            proxy_set_header Connection "upgrade";  # Maintains upgrade header connections.
+            include snippets/cookies.conf;
+        }
+
+        # Location block for a specific API endpoint; used for internal subrequests related to authentication.
+        location = /bonita/authservice {
+            internal;  # Marks this location as usable only for internal requests.
+            proxy_pass http://bonita_runtime/bonita/$auth_request_service/$appsmith_app;  # proxy_pass directive: Forwards requests to the authentication service.
+            proxy_pass_request_body off;
+            proxy_set_header Content-Length "";  # Clears the Content-Length header before forwarding.
+            proxy_set_header Accept application/json;  # Sets the Accept header to JSON. Mandatory with SSO as it allows to get a 401 when unauthentified instead of 302 to login page.
+            proxy_http_version 1.1;  # Sets the HTTP version used in the proxy request.
+            proxy_set_header Host $host;  # Sets the Host header to the host of the incoming request.
+            proxy_set_header X-Real-IP $remote_addr;  # Passes the real IP of the client to the proxied server.
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;  # Appends the client's IP to X-Forwarded-For header.
+            proxy_set_header X-Forwarded-Proto $preserve_x_forwarded_proto;  # Forwards the original request scheme.
+            proxy_set_header X-Forwarded-Host $preserve_x_forwarded_host;  # Forwards the original host requested.
+            proxy_set_header X-Forwarded-Port $preserve_x_forwarded_port;  # Forwards the original port requested.
+            proxy_method $auth_request_method; # Sets the HTTP method depending on the auth_request_service.
+            proxy_set_header Cookie $http_cookie;  # Forwards any cookies from the client.
+            include snippets/cookies.conf; # Modifies the cookie path to remove '/bonita'.
+        }
+
+        # Location block for /bonitalogout requests.
+        # It should work also without an active session.
+        location /bonitalogout {
+            proxy_pass http://appsmith/bonitalogout$is_args$args;  # Proxies requests to the Appsmith application.
+            proxy_http_version 1.1;  # Sets the HTTP version used in the proxy request.
+            proxy_set_header Host $host;  # Forwards the Host header.
+            proxy_set_header X-Real-IP $remote_addr;  # Forwards the real IP address.
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;  # Appends the client's IP to X-Forwarded-For header.
+            proxy_set_header X-Forwarded-Proto $preserve_x_forwarded_proto;  # Forwards the original request scheme.
+            proxy_set_header X-Forwarded-Host $preserve_x_forwarded_host;  # Forwards the original host requested.
+            proxy_set_header X-Forwarded-Port $preserve_x_forwarded_port;  # Forwards the original port requested.
+            proxy_set_header Upgrade $http_upgrade;  # Handles protocols upgrades, e.g., for WebSocket.
+            proxy_set_header Connection "upgrade";  # Maintains upgrade header connections.
+        }
+
+        # Default location block: handles all other requests.
+        location / {
+            set $appsmith_app unusedId; # Set the variable appsmith_app with a fake Id as it is used in the auth_request when signin=true
+            auth_request /bonita/authservice;  # auth_request directive: Makes a subrequest to authenticate the request.
+            error_page 401 = @redirect_to_login;  # Defines a custom error page for 401 Unauthorized responses.
+            error_page 500 502 503 504 =503 /5xx.html; # error page for auth and proxy level errors (needs to be repeated since global conf does not apply as soon as an error_page is defined in a location)
+            proxy_pass http://appsmith;  # Proxies requests to the Appsmith application.
+            proxy_http_version 1.1;  # Sets the HTTP version used in the proxy request.
+            proxy_set_header Host $host;  # Forwards the Host header.
+            proxy_set_header X-Real-IP $remote_addr;  # Forwards the real IP address.
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;  # Appends the client's IP to X-Forwarded-For header.
+            proxy_set_header X-Forwarded-Proto $preserve_x_forwarded_proto;  # Forwards the original request scheme.
+            proxy_set_header X-Forwarded-Host $preserve_x_forwarded_host;  # Forwards the original host requested.
+            proxy_set_header X-Forwarded-Port $preserve_x_forwarded_port;  # Forwards the original port requested.
+            proxy_set_header Upgrade $http_upgrade;  # Handles protocols upgrades, e.g., for WebSocket.
+            proxy_set_header Connection "upgrade";  # Maintains upgrade header connections.
+            include snippets/cookies.conf;
+        }
+
+        # Named location for handling redirections when unauthorized access is detected.
+        location @redirect_to_login {
+            return 302 /bonita/apps/sendRedirect?redirectUrl=$encoded_uri;  # Redirects to the login page, appending the original requested URL.
+        }
+
+        location = /5xx.html {
+            internal;
+        }
+    }
+
+    include snippets/https-redirect.conf;  # include directive: Includes the redirect configuration for http to https.
+}

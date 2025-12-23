@@ -1,0 +1,10 @@
+# Archivos de licencia privada
+license.lic
+*.lic
+
+# Directorios de trabajo de herramientas
+.claude/
+.cursor/
+
+# Variables de entorno locales (opcional)
+docker-compose/.env.local
