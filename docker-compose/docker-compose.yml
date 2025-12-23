@@ -112,97 +112,95 @@ services:
     restart: unless-stopped
 
   # Bonita Runtime Engine - Instance 2 (HA Cluster)
-  # COMMENTED OUT for local development on Apple Silicon (Hazelcast clustering issue with Rosetta 2)
-  # Uncomment when deploying to native Linux amd64 (Null Platform/AWS)
-  # bonita-runtime-2:
-  #   image: ${BONITA_IMAGE_REPOSITORY:-bonitasoft.jfrog.io/docker/bonita-subscription}:${BONITA_IMAGE_TAG:-10.2.3}
-  #   container_name: bonita-runtime-2
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #   # Note: Ports not published externally in HA mode - access via UI Proxy
-  #   # Uncomment for direct access during troubleshooting:
-  #   # ports:
-  #   #   - "8082:8080"
-  #   environment:
-  #     # Timezone
-  #     - TZ=${TIMEZONE:-Europe/Paris}
-  #
-  #     # Cluster configuration - ENABLED for HA
-  #     - CLUSTER_MODE=${CLUSTER_MODE:-true}
-  #     - REMOTE_IP_VALVE_ENABLED=${REMOTE_IP_ENABLED:-true}
-  #
-  #     # Database - Bonita
-  #     - DB_VENDOR=${DB_VENDOR:-postgres}
-  #     - DB_HOST=${DB_HOST:-postgres}
-  #     - DB_PORT=${DB_PORT:-5432}
-  #     - DB_NAME=${DB_NAME:-bonita}
-  #     - DB_USER=${DB_USER:-bonitauser}
-  #     - DB_PASS=${DB_PASSWORD:-myDbSecret}
-  #
-  #     # Database - Business Data (BDM)
-  #     - BIZ_DB_NAME=${BDM_DB_NAME:-bizdata}
-  #     - BIZ_DB_USER=${BDM_DB_USER:-bizuser}
-  #     - BIZ_DB_PASS=${BDM_DB_PASSWORD:-myBdmSecret}
-  #
-  #     # Connection pools - Bonita DB
-  #     - BONITA_DS_CONNECTION_POOL_INITIAL_SIZE=${BONITA_POOL_INITIAL_SIZE:-2}
-  #     - BONITA_DS_CONNECTION_POOL_MAX_TOTAL=${BONITA_POOL_MAX_TOTAL:-10}
-  #     - BONITA_DS_CONNECTION_POOL_MIN_IDLE=${BONITA_POOL_MIN_IDLE:-2}
-  #     - BONITA_DS_CONNECTION_POOL_MAX_IDLE=${BONITA_POOL_MAX_IDLE:-10}
-  #
-  #     # Connection pools - BDM DB
-  #     - BDM_DS_CONNECTION_POOL_INITIAL_SIZE=${BDM_POOL_INITIAL_SIZE:-1}
-  #     - BDM_DS_CONNECTION_POOL_MAX_TOTAL=${BDM_POOL_MAX_TOTAL:-5}
-  #     - BDM_DS_CONNECTION_POOL_MIN_IDLE=${BDM_POOL_MIN_IDLE:-1}
-  #     - BDM_DS_CONNECTION_POOL_MAX_IDLE=${BDM_POOL_MAX_IDLE:-5}
-  #
-  #     # Credentials - Tenant Admin
-  #     - BONITA_RUNTIME_ADMIN_USERNAME=${TENANT_USERNAME:-admin}
-  #     - BONITA_RUNTIME_ADMIN_PASSWORD=${TENANT_PASSWORD:-myAdminSecret}
-  #
-  #     # Credentials - Platform Admin
-  #     - PLATFORM_LOGIN=${PLATFORM_USERNAME:-pflogin}
-  #     - PLATFORM_PASSWORD=${PLATFORM_PASSWORD:-myPfSecret}
-  #
-  #     # Credentials - Monitoring
-  #     - MONITORING_USERNAME=${MONITORING_USERNAME:-monitoring}
-  #     - MONITORING_PASSWORD=${MONITORING_PASSWORD:-myMonitoringSecret}
-  #
-  #     # Session configuration
-  #     - BONITA_RUNTIME_SESSION_DURATION=${SESSION_DURATION_MS:-3600000}
-  #     - BONITA_RUNTIME_CLUSTER_HTTP_SESSION_TIMEOUT=${SESSION_DURATION_SEC:-3600}
-  #
-  #     # Access logs
-  #     - ACCESSLOGS_STDOUT_ENABLED=${ACCESSLOGS_STDOUT:-true}
-  #     - ACCESSLOGS_FILES_ENABLED=${ACCESSLOGS_FILES:-false}
-  #
-  #     # Performance tuning
-  #     - BONITA_PLATFORM_PERSISTENCE_USE_SECOND_LEVEL_CACHE=${USE_SECOND_LEVEL_CACHE:-false}
-  #     - HTTP_MAX_THREADS=${HTTP_MAX_THREADS:-}
-  #
-  #     # Java options - Including Hazelcast public address for clustering
-  #     - JAVA_OPTS=-Djava.awt.headless=true -XX:+UseContainerSupport -XX:InitialRAMPercentage=60 -XX:MaxRAMPercentage=60 -XX:MinRAMPercentage=60 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/opt/bonita_run/$${HOSTNAME}.hprof -XX:+UseG1GC -XX:+UseStringDeduplication -XX:MaxGCPauseMillis=500 -XX:InitiatingHeapOccupancyPercent=45 -Dbonita.client.home=/opt/bonita_lic -Dbonita.csrf.cookie.path=/ -Dhazelcast.local.publicAddress=bonita-runtime-2 ${JAVA_OPTS_EXTRA:-}
-  #
-  #   volumes:
-  #     # Cluster configuration (required for HA)
-  #     - ./cluster-config:/opt/custom-config.d
-  #     # Optional: Mount license file (uncomment if you have a license)
-  #     - ./license.lic:/opt/bonita_lic/license.lic
-  #     # Optional: Custom init scripts
-  #     # - ./custom-init-scripts:/opt/custom-init.d:ro
-  #
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "curl -f -H 'Authorization: Basic $$(echo -n $${MONITORING_USERNAME}:$${MONITORING_PASSWORD} | base64)' http://localhost:8080/bonita/healthz || exit 1"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
-  #     start_period: 120s
-  #
-  #   networks:
-  #     - bonita-network
-  #
-  #   restart: unless-stopped
+  bonita-runtime-2:
+    image: ${BONITA_IMAGE_REPOSITORY:-bonitasoft.jfrog.io/docker/bonita-subscription}:${BONITA_IMAGE_TAG:-10.2.3}
+    container_name: bonita-runtime-2
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Note: Ports not published externally in HA mode - access via UI Proxy
+    # Uncomment for direct access during troubleshooting:
+    # ports:
+    #   - "8082:8080"
+    environment:
+      # Timezone
+      - TZ=${TIMEZONE:-Europe/Paris}
+
+      # Cluster configuration - ENABLED for HA
+      - CLUSTER_MODE=${CLUSTER_MODE:-true}
+      - REMOTE_IP_VALVE_ENABLED=${REMOTE_IP_ENABLED:-true}
+
+      # Database - Bonita
+      - DB_VENDOR=${DB_VENDOR:-postgres}
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-bonita}
+      - DB_USER=${DB_USER:-bonitauser}
+      - DB_PASS=${DB_PASSWORD:-myDbSecret}
+
+      # Database - Business Data (BDM)
+      - BIZ_DB_NAME=${BDM_DB_NAME:-bizdata}
+      - BIZ_DB_USER=${BDM_DB_USER:-bizuser}
+      - BIZ_DB_PASS=${BDM_DB_PASSWORD:-myBdmSecret}
+
+      # Connection pools - Bonita DB
+      - BONITA_DS_CONNECTION_POOL_INITIAL_SIZE=${BONITA_POOL_INITIAL_SIZE:-2}
+      - BONITA_DS_CONNECTION_POOL_MAX_TOTAL=${BONITA_POOL_MAX_TOTAL:-10}
+      - BONITA_DS_CONNECTION_POOL_MIN_IDLE=${BONITA_POOL_MIN_IDLE:-2}
+      - BONITA_DS_CONNECTION_POOL_MAX_IDLE=${BONITA_POOL_MAX_IDLE:-10}
+
+      # Connection pools - BDM DB
+      - BDM_DS_CONNECTION_POOL_INITIAL_SIZE=${BDM_POOL_INITIAL_SIZE:-1}
+      - BDM_DS_CONNECTION_POOL_MAX_TOTAL=${BDM_POOL_MAX_TOTAL:-5}
+      - BDM_DS_CONNECTION_POOL_MIN_IDLE=${BDM_POOL_MIN_IDLE:-1}
+      - BDM_DS_CONNECTION_POOL_MAX_IDLE=${BDM_POOL_MAX_IDLE:-5}
+
+      # Credentials - Tenant Admin
+      - BONITA_RUNTIME_ADMIN_USERNAME=${TENANT_USERNAME:-admin}
+      - BONITA_RUNTIME_ADMIN_PASSWORD=${TENANT_PASSWORD:-myAdminSecret}
+
+      # Credentials - Platform Admin
+      - PLATFORM_LOGIN=${PLATFORM_USERNAME:-pflogin}
+      - PLATFORM_PASSWORD=${PLATFORM_PASSWORD:-myPfSecret}
+
+      # Credentials - Monitoring
+      - MONITORING_USERNAME=${MONITORING_USERNAME:-monitoring}
+      - MONITORING_PASSWORD=${MONITORING_PASSWORD:-myMonitoringSecret}
+
+      # Session configuration
+      - BONITA_RUNTIME_SESSION_DURATION=${SESSION_DURATION_MS:-3600000}
+      - BONITA_RUNTIME_CLUSTER_HTTP_SESSION_TIMEOUT=${SESSION_DURATION_SEC:-3600}
+
+      # Access logs
+      - ACCESSLOGS_STDOUT_ENABLED=${ACCESSLOGS_STDOUT:-true}
+      - ACCESSLOGS_FILES_ENABLED=${ACCESSLOGS_FILES:-false}
+
+      # Performance tuning
+      - BONITA_PLATFORM_PERSISTENCE_USE_SECOND_LEVEL_CACHE=${USE_SECOND_LEVEL_CACHE:-false}
+      - HTTP_MAX_THREADS=${HTTP_MAX_THREADS:-}
+
+      # Java options - Including Hazelcast public address for clustering
+      - JAVA_OPTS=-Djava.awt.headless=true -XX:+UseContainerSupport -XX:InitialRAMPercentage=60 -XX:MaxRAMPercentage=60 -XX:MinRAMPercentage=60 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/opt/bonita_run/$${HOSTNAME}.hprof -XX:+UseG1GC -XX:+UseStringDeduplication -XX:MaxGCPauseMillis=500 -XX:InitiatingHeapOccupancyPercent=45 -Dbonita.client.home=/opt/bonita_lic -Dbonita.csrf.cookie.path=/ -Dhazelcast.local.publicAddress=bonita-runtime-2 ${JAVA_OPTS_EXTRA:-}
+
+    volumes:
+      # Cluster configuration (required for HA)
+      - ./cluster-config:/opt/custom-config.d
+      # Optional: Mount license file (uncomment if you have a license)
+      - ./license.lic:/opt/bonita_lic/license.lic
+      # Optional: Custom init scripts
+      # - ./custom-init-scripts:/opt/custom-init.d:ro
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f -H 'Authorization: Basic $$(echo -n $${MONITORING_USERNAME}:$${MONITORING_PASSWORD} | base64)' http://localhost:8080/bonita/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+    networks:
+      - bonita-network
+
+    restart: unless-stopped
 
   # UI Builder
   ui-builder:
@@ -250,7 +248,7 @@ services:
     container_name: bonita-ui-proxy
     depends_on:
       - bonita-runtime-1
-      # - bonita-runtime-2
+      - bonita-runtime-2
       - ui-builder
     ports:
       - "${UI_PROXY_PORT:-80}:80"
