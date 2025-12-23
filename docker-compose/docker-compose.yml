@@ -214,14 +214,14 @@ services:
     ports:
       - "${UI_BUILDER_PORT:-8081}:80"
     environment:
-      # Bonita API connection - Points to runtime-1 (load balancing handled by UI Proxy)
-      # In production, this could point directly to UI Proxy for better HA
-      - BONITA_API_URL=http://bonita-runtime-1:8080/bonita/API
+      # Bonita API connection - MUST use UI Proxy for cookie path compatibility
+      # Cookies are created with Path=/ through proxy, so internal calls must also go through proxy
+      - BONITA_API_URL=http://ui-proxy/bonita/API
       - BONITA_HEALTHCHECK_USER=${MONITORING_USERNAME:-monitoring}
       - BONITA_HEALTHCHECK_PASSWORD=${MONITORING_PASSWORD:-myMonitoringSecret}
 
       # Development mode
-      - BONITA_DEV_MODE=${UI_BUILDER_DEV_MODE:-false}
+      - BONITA_DEV_MODE=${UI_BUILDER_DEV_MODE:-true}
 
       # Logging configuration
       - LOGGING_LEVEL_ROOT=info
