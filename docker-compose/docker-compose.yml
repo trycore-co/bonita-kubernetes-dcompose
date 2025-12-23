@@ -230,6 +230,10 @@ services:
       - LOGGING_LEVEL_COM_EXTERNAL_PLUGINS=info
       - LOGGING_PATTERN_CONSOLE=%msg
 
+    volumes:
+      # Mount workspace applications for JSON form deployment
+      - ./workspace/applications:/opt/appsmith/workspace/applications
+
     healthcheck:
       test: ["CMD-SHELL", "/opt/appsmith/healthcheck.sh"]
       interval: 30s
