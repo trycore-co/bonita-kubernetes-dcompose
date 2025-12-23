@@ -1,15 +1,16 @@
 # Bonita Docker Compose - Quick Start Guide
 
-Get Bonita up and running in 5 minutes for development and testing.
+Get Bonita HA cluster up and running in 5 minutes.
 
 ## Prerequisites
 
 - Docker Desktop or Docker Engine with Compose
 - 8GB RAM available
-- Ports 80, 8080, 5432 available
+- Ports 80, 8081, 5435 available
 - Access to Bonitasoft Docker registry
+- Valid Bonita license file
 
-## Step 1: Clone and Navigate
+## Step 1: Navigate to Directory
 
 ```bash
 cd docker-compose
@@ -17,71 +18,63 @@ cd docker-compose
 
 ## Step 2: Configure Environment
 
-Create `.env` from template:
-
 ```bash
 cp .env.example .env
 ```
 
-**Minimum required changes** (edit `.env`):
-- Update passwords if desired (optional for testing)
-- Keep defaults for local testing
+Verify `CLUSTER_MODE=true` is set (default).
 
 ## Step 3: Docker Registry Login
-
-Login to Bonitasoft registry:
 
 ```bash
 docker login bonitasoft.jfrog.io
 ```
 
-Enter credentials provided by Bonita team.
+## Step 4: Add License File
 
-## Step 4: Start Services
+```bash
+cp /path/to/BonitaSubscription-*.lic license.lic
+```
+
+## Step 5: Start Services
 
 ```bash
 docker-compose up -d
 ```
 
-This will:
-1. Pull required images (may take a few minutes first time)
-2. Create network and volumes
-3. Initialize PostgreSQL databases
-4. Start all services
-
-## Step 5: Monitor Startup
-
-Watch Bonita startup logs:
+## Step 6: Monitor Startup
 
 ```bash
-docker-compose logs -f bonita-runtime
+docker-compose logs -f bonita-runtime-1 bonita-runtime-2
 ```
 
-Wait for message: `Server startup in [XXXX] milliseconds`
+Wait for (2-3 minutes):
+- `Cluster mode: Activated`
+- `Server startup in [XXXX] milliseconds`
 
 Press `Ctrl+C` to exit log view.
 
-## Step 6: Access Bonita
+## Step 7: Verify Cluster
 
-Open browser to:
-
-```
-http://localhost
+```bash
+docker-compose logs bonita-runtime-1 bonita-runtime-2 | grep -iE "Cluster mode:|Members"
 ```
 
-**Login credentials** (from `.env`):
-- Username: `admin`
-- Password: `myAdminSecret`
+## Step 8: Access Bonita
+
+- **URL**: http://localhost
+- **Username**: admin
+- **Password**: myAdminSecret
 
 ## Verify All Services
 
-Check service status:
-
 ```bash
-docker-compose ps
+docker-compose ps -a
 ```
 
-All services should show `Up (healthy)`.
+All services should show `Up`.
+
+**Note**: `unhealthy` status on runtimes is expected due to authentication requirements on health endpoint.
 
 ## Quick Commands
 
@@ -89,128 +82,59 @@ All services should show `Up (healthy)`.
 # View all logs
 docker-compose logs -f
 
-# View specific service logs
+# View specific service
 docker-compose logs -f bonita-runtime-1
 
-# Restart services
+# Check status
+docker-compose ps -a
+
+# Restart runtimes
 docker-compose restart bonita-runtime-1 bonita-runtime-2
 
-# Stop all services
+# Stop all
 docker-compose stop
 
 # Stop and remove (keeps data)
 docker-compose down
 
-# Stop and remove including data
+# Stop and remove everything
 docker-compose down -v
-
-# Verify HA cluster status
-./scripts/verify-cluster.sh
 ```
 
-## Troubleshooting
+## Test Failover
 
-### Services won't start
-
-```bash
-# Check if ports are available
-lsof -i :80
-lsof -i :8080
-lsof -i :5432
-
-# Check Docker resources
-docker system df
-docker system prune  # Clean up if needed
-```
-
-### Database initialization failed
-
-```bash
-# Remove volume and restart
-docker-compose down -v
-docker-compose up -d
-```
-
-### Can't access http://localhost
-
-```bash
-# Check UI Proxy status
-docker-compose logs ui-proxy
-
-# Try direct access to Bonita (note: ports not published in HA mode)
-docker-compose logs ui-proxy | grep -i error
-```
-
-### Need to reset everything
-
-```bash
-# Complete cleanup
-docker-compose down -v
-rm -rf .env
-cp .env.example .env
-# Edit .env if needed
-docker-compose up -d
-```
-
-## What's Next?
-
-### Development
-
-1. Create processes in Bonita Studio
-2. Deploy to this runtime
-3. Test in UI Builder
-
-### Add License File
-
-```bash
-# Copy your license
-cp /path/to/license.lic ./license.lic
-
-# Edit docker-compose.yml - uncomment license volume in both runtime services
-
-# Restart
-docker-compose restart bonita-runtime-1 bonita-runtime-2
-```
-
-### Connect to Database
-
-```bash
-# Access PostgreSQL
-docker-compose exec postgres psql -U bonitauser -d bonita
-
-# Or use your favorite DB client:
-# Host: localhost
-# Port: 5432
-# Database: bonita
-# User: bonitauser
-# Password: myDbSecret
-```
-
-### High Availability Clustering
-
-**Clustering is enabled by default!** This setup includes:
-- 2 Bonita Runtime instances (bonita-runtime-1, bonita-runtime-2)
-- Hazelcast clustering for session replication
-- NGINX load balancing with sticky sessions
-
-Verify cluster status:
-```bash
-./scripts/verify-cluster.sh
-```
-
-Test failover:
 ```bash
 # Stop one instance
 docker-compose stop bonita-runtime-1
 
-# Application should still work via runtime-2
-curl http://localhost/bonita/login.jsp
+# App should still work
+curl -I http://localhost/bonita/login.jsp
 
 # Restart
 docker-compose start bonita-runtime-1
 ```
 
-See [CLUSTERING.md](CLUSTERING.md) for detailed HA guide.
+## Troubleshooting
+
+### Database init fails: "cannot execute"
+
+This is caused by Windows line endings in shell scripts. The `.gitattributes` file should prevent this automatically. If you cloned before it existed:
+
+```bash
+git add --renormalize .
+git checkout -- init-db/
+docker-compose down -v
+docker-compose up -d
+```
+
+### NGINX: "host not found in upstream"
+
+Mismatch between `docker-compose.yml` and `nginx-config/nginx.conf.template`. Ensure both have same runtime instances.
+
+### Cluster shows size:1
+
+- Wait 2-3 minutes for full startup
+- Verify `CLUSTER_MODE=true` in `.env`
 
 ## Architecture
 
@@ -220,37 +144,23 @@ See [CLUSTERING.md](CLUSTERING.md) for detailed HA guide.
 └─────────────────┬───────────────────────┘
                   │
         ┌─────────▼─────────┐
-        │   UI Proxy :80    │  (NGINX)
+        │   UI Proxy :80    │  (NGINX LB)
         └────┬──────────┬───┘
              │          │
     ┌────────▼────┐  ┌──▼──────────────┐
-    │  UI Builder │  │ Bonita Runtime-1│ ←┐
-    │    :8081    │  │                 │  │ Hazelcast
-    └─────────────┘  └───┬─────────────┘  │ (5701)
-                         │  ┌─────────────┘
-                         │  │ Bonita Runtime-2│
-                         │  └─────────────────┘
-                         ↓
-                    ┌────▼──────┐
-                    │ PostgreSQL│
-                    │   :5432   │
-                    └───────────┘
+    │  UI Builder │  │ Bonita Runtime-1│ ←──┐
+    │    :8081    │  │     :8080       │    │ Hazelcast
+    └─────────────┘  └───────┬─────────┘    │ (5701)
+                             │  ┌───────────┘
+                             │  │ Bonita Runtime-2
+                             │  │     :8080
+                             │  └─────────────────┘
+                             ↓
+                    ┌────────▼──────┐
+                    │   PostgreSQL  │
+                    │     :5435     │
+                    └───────────────┘
 ```
-
-## Resource Usage
-
-Expected resource consumption (HA mode with 2 runtimes):
-- **RAM**: ~6-8GB total (2GB per runtime instance)
-- **CPU**: 4-6 cores during startup, 2-3 cores idle
-- **Disk**: ~6GB for images + database
-
-## Default URLs
-
-- **Main Portal**: http://localhost (via UI Proxy load balancer)
-- **UI Builder** (direct): http://localhost:8081
-- **Cluster Status**: `./scripts/verify-cluster.sh`
-
-Note: In HA mode, runtime ports (8080) are not published externally. Access via UI Proxy on port 80.
 
 ## Default Credentials
 
@@ -263,21 +173,14 @@ Note: In HA mode, runtime ports (8080) are not published externally. Access via 
 | Bonita DB | bonitauser | myDbSecret |
 | BDM DB | bizuser | myBdmSecret |
 
-**⚠️ Change these passwords for production deployments!**
+**Change these for production!**
 
 ## Next Steps
 
-- Read full [README.md](README.md) for detailed configuration and HA guide
-- See [NULL_PLATFORM.md](NULL_PLATFORM.md) for production deployment on Null Platform
-- See [CLUSTERING.md](CLUSTERING.md) for advanced clustering configuration
-- Check Bonita documentation: https://documentation.bonitasoft.com/
-
-## Getting Help
-
-- Check `docker-compose logs` for error messages
-- Review [README.md](README.md) troubleshooting section
-- Contact Bonita support for platform issues
+- Read [README.md](README.md) for full configuration
+- See [CLUSTERING.md](CLUSTERING.md) for advanced HA setup
+- See [NULL_PLATFORM.md](NULL_PLATFORM.md) for production deployment
 
 ---
 
-**Happy Bonita Development! 🚀**
+**Last Updated**: December 2024

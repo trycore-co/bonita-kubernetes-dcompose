@@ -2,21 +2,7 @@
 
 Complete guide for deploying and managing Bonita Enterprise in High Availability mode with Docker Compose.
 
-## Table of Contents
-
-1. [Architecture Overview](#architecture-overview)
-2. [Quick Start](#quick-start)
-3. [Configuration Details](#configuration-details)
-4. [Verification and Monitoring](#verification-and-monitoring)
-5. [Failover Testing](#failover-testing)
-6. [Performance Tuning](#performance-tuning)
-7. [Scaling Beyond 2 Instances](#scaling-beyond-2-instances)
-8. [Troubleshooting](#troubleshooting)
-9. [Production Checklist](#production-checklist)
-
 ## Architecture Overview
-
-### HA Components
 
 ```
 ┌─────────────────┐
@@ -45,47 +31,30 @@ Complete guide for deploying and managing Bonita Enterprise in High Availability
 4. **Sticky Sessions**: NGINX `ip_hash` keeps clients on same backend
 5. **Automatic Failover**: If one node fails, NGINX routes to healthy node
 
-## Quick Start
+## Configuration Files
 
-```bash
-# 1. Navigate to docker-compose directory
-cd docker-compose
+When modifying the cluster, you must update **three files**:
 
-# 2. Copy environment template
-cp .env.example .env
+| File | What to Update |
+|------|----------------|
+| `docker-compose.yml` | Add/remove runtime service definitions |
+| `nginx-config/nginx.conf.template` | Add/remove servers in upstream block |
+| `cluster-config/bonita-platform-sp-cluster-custom.properties` | Add/remove Hazelcast members |
 
-# 3. Verify CLUSTER_MODE=true (default)
-grep CLUSTER_MODE .env
+### Hazelcast Configuration
 
-# 4. Start cluster
-docker-compose up -d
+**File**: `cluster-config/bonita-platform-sp-cluster-custom.properties`
 
-# 5. Wait for startup (2-3 minutes)
-docker-compose logs -f bonita-runtime-1 bonita-runtime-2 | grep "Server startup"
-
-# 6. Verify cluster formed
-./scripts/verify-cluster.sh
-
-# 7. Access application
-open http://localhost
+```properties
+bonita.cluster.group.name=bonita-docker-cluster
+bonita.platform.cluster.hazelcast.tcpip.enabled=true
+bonita.platform.cluster.hazelcast.tcpip.members=bonita-runtime-1:5701,bonita-runtime-2:5701
 ```
 
-## Configuration Details
+### NGINX Load Balancer
 
-### Hazelcast Clustering
+**File**: `nginx-config/nginx.conf.template`
 
-**Configuration File**: `cluster-config/bonita-platform-sp-cluster-custom.properties`
-
-Key settings:
-- `bonita.cluster.group.name`: Cluster identifier (all members must match)
-- `bonita.platform.cluster.hazelcast.tcpip.enabled=true`: Use TCP/IP discovery
-- `bonita.platform.cluster.hazelcast.tcpip.members`: Static member list
-
-### NGINX Load Balancing
-
-**Template**: `nginx-config/nginx.conf.template`
-
-Upstream configuration:
 ```nginx
 upstream bonita_runtime {
     ip_hash;  # Sticky sessions
@@ -94,70 +63,43 @@ upstream bonita_runtime {
 }
 ```
 
-**Strategies**:
-- `ip_hash`: Client IP determines backend (current)
+**Load Balancing Strategies**:
+- `ip_hash`: Client IP determines backend (recommended)
 - `least_conn`: Least connections
-- `round_robin`: Sequential distribution (default if no directive)
+- No directive: Round-robin
 
-### Java Options
+## Verifying Cluster Status
 
-Each runtime includes:
-```
--Dhazelcast.local.publicAddress=bonita-runtime-X
-```
-
-This ensures Hazelcast advertises correct hostname for cluster communication.
-
-## Verification and Monitoring
-
-### Cluster Status Script
+### Check Cluster Mode Activated
 
 ```bash
-./scripts/verify-cluster.sh
+docker-compose logs bonita-runtime-1 bonita-runtime-2 | grep "Cluster mode:"
 ```
 
 Expected output:
 ```
-===============================================================================
-Bonita HA Cluster Status Verification
-===============================================================================
-
-[1/5] Checking container status...
-  ✓ bonita-runtime-1: Running
-  ✓ bonita-runtime-2: Running
-
-[2/5] Checking Hazelcast cluster membership...
-  Runtime 1: Members {size:2, ver:2} [Member [172.18.0.3]:5701 ...]
-  Runtime 2: Members {size:2, ver:2} [Member [172.18.0.4]:5701 ...]
-
-[3/5] Verifying cluster size...
-  ✓ Runtime 1 reports cluster size: 2
-  ✓ Runtime 2 reports cluster size: 2
-
-STATUS: ✓ CLUSTER IS HEALTHY
+Cluster mode: Activated
+Cluster mode: Activated
 ```
 
-### Manual Verification
+### Check Hazelcast Members
 
-**Check cluster membership logs**:
 ```bash
 docker-compose logs bonita-runtime-1 bonita-runtime-2 | grep "Members {size:"
 ```
 
-**Check Hazelcast connectivity**:
-```bash
-docker-compose logs bonita-runtime-1 bonita-runtime-2 | grep "hazelcast" | grep -i "member"
+Expected output:
+```
+Members {size:2, ver:2} [Member [...] this, Member [...]]
 ```
 
-**Monitor health checks**:
+### Container Status
+
 ```bash
-watch docker-compose ps
+docker-compose ps -a
 ```
 
-### Monitoring Endpoints
-
-- **NGINX Status**: http://localhost:90/nginx_status (internal)
-- **Cluster Status**: Via logs (no HTTP endpoint)
+**Note**: `unhealthy` status on runtimes is expected. The health endpoint requires authentication which Docker health check doesn't provide. The application works correctly.
 
 ## Failover Testing
 
@@ -167,92 +109,25 @@ watch docker-compose ps
 # Stop runtime-1
 docker-compose stop bonita-runtime-1
 
-# Verify runtime-2 serves requests
+# Verify app still works via runtime-2
 curl -I http://localhost/bonita/login.jsp
 # Should return 200 OK
 
-# Check NGINX routes to runtime-2
-docker-compose logs ui-proxy | tail -20
-
-# Restart runtime-1
+# Restart
 docker-compose start bonita-runtime-1
 
-# Wait for rejoin (check logs)
+# Wait for rejoin
 docker-compose logs bonita-runtime-1 | grep "Members {size:2"
 ```
 
 ### Test 2: Rolling Restart
 
 ```bash
-# Restart instances one at a time
 docker-compose restart bonita-runtime-1
-# Wait for healthy
-sleep 60
-
+sleep 90
 docker-compose restart bonita-runtime-2
 # Application remains available throughout
 ```
-
-### Test 3: Session Persistence
-
-```bash
-# Login to application
-# Note your session cookie (JSESSIONID)
-
-# Stop the instance you're connected to
-docker-compose stop bonita-runtime-1  # (or -2)
-
-# Refresh page - session should persist
-# (May require re-login depending on Hazelcast sync timing)
-```
-
-## Performance Tuning
-
-### Connection Pools
-
-Adjust in `.env`:
-```bash
-# Per-instance settings (multiply by number of instances)
-BONITA_POOL_MAX_TOTAL=20    # Max connections to Bonita DB
-BDM_POOL_MAX_TOTAL=10       # Max connections to BDM DB
-```
-
-**Rule of thumb**:
-- Total pool max should not exceed PostgreSQL max_connections
-- Default PostgreSQL max_connections=100
-- With 2 runtimes: max 40 connections per instance
-
-### JVM Heap Size
-
-Current: 60% of container RAM (default)
-
-To adjust, modify `JAVA_OPTS` in docker-compose.yml:
-```
--XX:InitialRAMPercentage=50
--XX:MaxRAMPercentage=70
-```
-
-### HTTP Thread Pool
-
-```bash
-# In .env
-HTTP_MAX_THREADS=200  # Increase for high concurrency
-```
-
-### Resource Limits
-
-Recommended per runtime instance:
-```yaml
-resources:
-  limits:
-    cpus: '2'
-    memory: 2G
-  reservations:
-    cpus: '1'
-    memory: 1G
-```
-
-Add to docker-compose.yml under `deploy` for each runtime.
 
 ## Scaling Beyond 2 Instances
 
@@ -260,12 +135,14 @@ Add to docker-compose.yml under `deploy` for each runtime.
 
 **Step 1**: Edit `docker-compose.yml`
 
-Add new service (copy bonita-runtime-2, rename to bonita-runtime-3):
+Copy `bonita-runtime-2` section as `bonita-runtime-3`:
 ```yaml
 bonita-runtime-3:
-  # ... same config as runtime-2
+  image: ${BONITA_IMAGE_REPOSITORY:-bonitasoft.jfrog.io/docker/bonita-subscription}:${BONITA_IMAGE_TAG:-10.2.3}
   container_name: bonita-runtime-3
+  # ... same config as runtime-2
   environment:
+    # ... same environment
     - JAVA_OPTS=... -Dhazelcast.local.publicAddress=bonita-runtime-3 ...
 ```
 
@@ -276,7 +153,7 @@ Edit `cluster-config/bonita-platform-sp-cluster-custom.properties`:
 bonita.platform.cluster.hazelcast.tcpip.members=bonita-runtime-1:5701,bonita-runtime-2:5701,bonita-runtime-3:5701
 ```
 
-**Step 3**: Update NGINX load balancer
+**Step 3**: Update NGINX
 
 Edit `nginx-config/nginx.conf.template`:
 ```nginx
@@ -288,180 +165,113 @@ upstream bonita_runtime {
 }
 ```
 
-**Step 4**: Restart all services
+**Step 4**: Restart
 
 ```bash
 docker-compose down
 docker-compose up -d
-./scripts/verify-cluster.sh  # Should show size:3
 ```
 
 ## Troubleshooting
 
-### Issue: Cluster Size Shows 1 Instead of 2
-
-**Symptoms**:
-```
-Members {size:1, ver:1} [Member [172.18.0.3]:5701 - <uuid> this]
-```
+### Cluster Size Shows 1 Instead of 2
 
 **Causes & Solutions**:
 
-1. **Containers still starting**
+1. **Containers still starting**: Wait 2-3 minutes
    ```bash
-   # Wait 2-3 minutes
    docker-compose logs -f bonita-runtime-1 bonita-runtime-2
-   # Look for "Server startup in [XXXX] milliseconds"
    ```
 
-2. **CLUSTER_MODE not enabled**
+2. **CLUSTER_MODE not enabled**:
    ```bash
    grep CLUSTER_MODE .env  # Should be 'true'
-   docker-compose config | grep CLUSTER_MODE
    ```
 
-3. **Cluster config not mounted**
+3. **Cluster config not mounted**:
    ```bash
    docker-compose exec bonita-runtime-1 ls -la /opt/custom-config.d/
-   # Should show bonita-platform-sp-cluster-custom.properties
    ```
 
-4. **Hazelcast port 5701 blocked**
+4. **Hazelcast port 5701 blocked**:
    ```bash
    docker-compose exec bonita-runtime-1 nc -zv bonita-runtime-2 5701
-   # Should connect successfully
    ```
 
-5. **Wrong Hazelcast member list**
-   ```bash
-   docker-compose exec bonita-runtime-1 cat /opt/custom-config.d/bonita-platform-sp-cluster-custom.properties | grep tcpip.members
-   # Should list both runtime-1:5701 and runtime-2:5701
-   ```
+### NGINX "host not found in upstream"
 
-### Issue: One Instance Keeps Restarting
+**Cause**: `nginx.conf.template` references a runtime that doesn't exist in `docker-compose.yml`.
 
-**Check logs**:
+**Solution**: Ensure both files have matching runtime definitions. Comment out missing runtimes in nginx config.
+
+### One Instance Keeps Restarting
+
 ```bash
+# Check logs
 docker-compose logs bonita-runtime-X | grep -iE "error|exception|fatal"
+
+# Check resources
+docker stats bonita-runtime-1 bonita-runtime-2
 ```
 
 **Common causes**:
 - Insufficient memory (needs ~2GB per instance)
 - Database connection issues
-- Port conflicts
+- License file missing
 
-**Solutions**:
+### Health Check Shows Unhealthy
+
+This is **expected behavior**. The `/bonita/healthz` endpoint requires authentication. Docker's health check returns 401 (Unauthorized), causing "unhealthy" status.
+
+The application works correctly. Verify via:
 ```bash
-# Check resources
-docker stats bonita-runtime-1 bonita-runtime-2
-
-# Increase memory limit
-docker-compose down
-# Edit docker-compose.yml, add under each runtime:
-# deploy:
-#   resources:
-#     limits:
-#       memory: 3G
-
-docker-compose up -d
+curl -I http://localhost/bonita/login.jsp  # Should return 200
 ```
 
-### Issue: Load Balancing Not Working
+## Performance Tuning
 
-**Test backend connectivity**:
+### Connection Pools
+
+Adjust in `.env`:
 ```bash
-# From inside ui-proxy container
-docker-compose exec ui-proxy curl -I http://bonita-runtime-1:8080/bonita/
-docker-compose exec ui-proxy curl -I http://bonita-runtime-2:8080/bonita/
-# Both should return 302 or 200
+BONITA_POOL_MAX_TOTAL=20    # Max connections to Bonita DB per instance
+BDM_POOL_MAX_TOTAL=10       # Max connections to BDM DB per instance
 ```
 
-**Check NGINX config**:
-```bash
-docker-compose exec ui-proxy cat /etc/nginx/conf.d/default.conf | grep -A 5 "upstream bonita_runtime"
-# Should show both backends
+**Rule of thumb**: Total pool max across all instances < PostgreSQL max_connections (default 100)
+
+### JVM Heap Size
+
+Current: 60% of container RAM. To adjust, modify `JAVA_OPTS` in docker-compose.yml:
+```
+-XX:InitialRAMPercentage=50
+-XX:MaxRAMPercentage=70
 ```
 
-**Check NGINX logs**:
-```bash
-docker-compose logs ui-proxy | grep -i error
-```
+### Resource Limits
 
-### Issue: Sessions Lost on Failover
-
-**Possible causes**:
-- Hazelcast session replication not working
-- Session timeout too short
-- Sticky sessions not configured
-
-**Solutions**:
-```bash
-# Verify session configuration
-docker-compose config | grep SESSION_DURATION
-
-# Check Hazelcast logs for replication
-docker-compose logs bonita-runtime-1 bonita-runtime-2 | grep -i "session"
-
-# Ensure ip_hash in NGINX (sticky sessions)
-docker-compose exec ui-proxy cat /etc/nginx/conf.d/default.conf | grep ip_hash
-```
+Recommended per runtime instance:
+- CPU: 2 cores
+- Memory: 2GB minimum
 
 ## Production Checklist
 
 ### Pre-Deployment
 
-- [ ] **License file**: Mounted in both runtime instances
-- [ ] **Credentials**: All default passwords changed in `.env`
-- [ ] **Database**: Production PostgreSQL (not Docker container)
-- [ ] **Resources**: Sufficient RAM (6GB+ for 2 instances)
-- [ ] **Secrets**: Use AWS Secrets Manager or Vault
-- [ ] **Monitoring**: CloudWatch/Prometheus configured
-- [ ] **Backups**: Database backup strategy in place
-- [ ] **HTTPS**: TLS termination at load balancer
-- [ ] **OCTA**: Authentication configured
+- [ ] License file mounted in both runtime instances
+- [ ] All default passwords changed in `.env`
+- [ ] `CLUSTER_MODE=true` verified
+- [ ] Resource limits configured
+- [ ] External PostgreSQL (not Docker) for production
+- [ ] HTTPS/TLS at load balancer
 
 ### Post-Deployment
 
-- [ ] **Cluster verification**: Run `./scripts/verify-cluster.sh`
-- [ ] **Failover test**: Stop one instance, verify application works
-- [ ] **Load test**: Simulate production traffic
-- [ ] **Session persistence**: Verify sessions survive failover
-- [ ] **Monitoring alerts**: Configure alerts for cluster issues
-- [ ] **Documentation**: Update runbooks with specific configuration
-- [ ] **Training**: Handoff to operations team
-
-### Monitoring Metrics
-
-Monitor these metrics in production:
-
-- Cluster size (should always equal number of instances)
-- Instance health (all healthy)
-- Response times (per backend)
-- Error rates (4xx, 5xx)
-- Database connections (pool utilization)
-- Memory usage (JVM heap)
-- CPU usage
-- Session counts
-- Hazelcast network traffic
-
-### Maintenance Windows
-
-For updates:
-1. Deploy to runtime-2 first (rolling update)
-2. Wait for health checks to pass
-3. Deploy to runtime-1
-4. Verify cluster reformed
-
-Zero-downtime deployment with proper health checks.
-
-## Additional Resources
-
-- **README.md**: Full deployment guide
-- **NULL_PLATFORM.md**: Production deployment on Null Platform
-- **QUICKSTART.md**: 5-minute getting started
-- **Bonita Documentation**: https://documentation.bonitasoft.com/bonita/latest/clustering
-- **Hazelcast Documentation**: https://docs.hazelcast.com/hazelcast/latest/
+- [ ] Cluster verification: Both runtimes show `Cluster mode: Activated`
+- [ ] Failover test: Stop one instance, verify app works
+- [ ] Session persistence verified
+- [ ] Monitoring configured
 
 ---
 
-**For support**: Contact Bonitasoft support or ITTI infrastructure team
+**Last Updated**: December 2024

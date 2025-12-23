@@ -1,0 +1,37 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Shell scripts must always use LF (Unix line endings)
+# These run inside Linux containers regardless of host OS
+*.sh text eol=lf
+
+# Docker and container configuration files
+Dockerfile* text eol=lf
+docker-compose*.yml text eol=lf
+docker-compose*.yaml text eol=lf
+
+# NGINX configuration templates
+*.conf text eol=lf
+*.conf.template text eol=lf
+
+# Properties files for Java/Bonita
+*.properties text eol=lf
+
+# SQL and database scripts
+*.sql text eol=lf
+
+# Kubernetes/Helm files
+*.yaml text eol=lf
+*.yml text eol=lf
+
+# Keep Windows batch files with CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files - no line ending conversion
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.lic binary

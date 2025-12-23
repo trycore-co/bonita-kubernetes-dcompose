@@ -244,6 +244,12 @@ http {
             include snippets/cookies.conf; # Modifies the cookie path to remove '/bonita'.
         }
 
+        # Location block for /user/login requests.
+        # Redirect to Bonita login - UI Builder's login endpoint returns empty 401.
+        location /user/login {
+            return 302 /bonita/apps/sendRedirect?redirectUrl=$arg_redirectUrl;
+        }
+
         # Location block for /bonitalogout requests.
         # It should work also without an active session.
         location /bonitalogout {
