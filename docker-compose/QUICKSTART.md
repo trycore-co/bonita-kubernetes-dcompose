@@ -42,6 +42,12 @@ cp /path/to/BonitaSubscription-*.lic license.lic
 docker-compose up -d
 ```
 
+**Note**: UI services (ui-builder, ui-proxy) depend on runtime healthcheck. If they remain in "Created" state after 2-3 minutes, start them manually:
+
+```bash
+docker-compose up -d --no-deps ui-builder ui-proxy
+```
+
 ## Step 6: Monitor Startup
 
 ```bash
@@ -135,6 +141,16 @@ Mismatch between `docker-compose.yml` and `nginx-config/nginx.conf.template`. En
 
 - Wait 2-3 minutes for full startup
 - Verify `CLUSTER_MODE=true` in `.env`
+
+### UI services stuck in "Created" state
+
+The ui-builder and ui-proxy services depend on bonita-runtime-1 healthcheck. Since the healthcheck requires authentication, it may report "unhealthy" even when the runtime is working correctly.
+
+**Solution**: Start UI services manually bypassing the dependency:
+
+```bash
+docker-compose up -d --no-deps ui-builder ui-proxy
+```
 
 ## Architecture
 
