@@ -40,7 +40,8 @@ BIZ_DB_USER: "bizuser"
 ### UI Builder
 
 ```yaml
-BONITA_API_URL: "http://bonita-runtime:8080/bonita/API"
+BONITA_API_URL: "http://ui-proxy:8082/bonita/API"  # Must route through proxy for cookie path compatibility
+UIB_INTERNAL_PORT: "8090"                           # Caddy listens on 8090 instead of 80 (avoids sidecar conflicts)
 BONITA_HEALTHCHECK_USER: "<from-secrets>"
 BONITA_HEALTHCHECK_PASSWORD: "<from-secrets>"
 BONITA_DEV_MODE: "false"
@@ -50,7 +51,8 @@ BONITA_DEV_MODE: "false"
 
 ```yaml
 UIB_HOST: "ui-builder"
-UIB_PORT: "80"
+UIB_PORT: "8090"              # Must match UIB_INTERNAL_PORT
+NGINX_LISTEN_ADDRESS: "8082"  # NGINX listens on 8082 instead of 80 (avoids sidecar conflicts)
 NGINX_ACCESS_LOG_ALL: "1"
 ```
 
@@ -118,10 +120,10 @@ livenessProbe:
 
 | Service | Internal Port | External | Protocol |
 |---------|--------------|----------|----------|
-| ui-proxy | 80 | Yes | HTTP |
+| ui-proxy | 8082 | Yes (→80) | HTTP |
 | bonita-runtime | 8080 | No | HTTP |
 | bonita-runtime | 5701 | No | TCP (Hazelcast) |
-| ui-builder | 80 | No | HTTP |
+| ui-builder | 8090 | No | HTTP |
 | postgres | 5432 | No | TCP |
 
 ### Service Names (Internal DNS)
@@ -177,9 +179,9 @@ volumes:
 
 ## Known Issues
 
-### Health Check Returns 401
+### Health Check Configuration
 
-The Bonita health endpoint `/bonita/healthz` requires authentication. Kubernetes probes must include Authorization header. In Docker Compose, this causes "unhealthy" status which can be ignored.
+The Bonita health endpoint `/bonita/healthz` requires authentication. Use `curl -u user:pass` or include a Basic Authorization header in Kubernetes probes (see Health Checks section above).
 
 ### Line Endings
 
@@ -210,4 +212,4 @@ kubectl logs deployment/bonita-runtime -n bonita | grep "Cluster mode:"
 
 ---
 
-**Last Updated**: December 2024
+**Last Updated**: February 2026

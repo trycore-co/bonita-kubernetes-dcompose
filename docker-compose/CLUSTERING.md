@@ -6,7 +6,7 @@ Complete guide for deploying and managing Bonita Enterprise in High Availability
 
 ```
 ┌─────────────────┐
-│   UI Proxy      │  ← Entry point (port 80)
+│   UI Proxy      │  ← Entry point (port 80→8082 internal)
 │   (NGINX LB)    │     Load balancing with ip_hash
 └────────┬────────┘
          │
@@ -99,7 +99,7 @@ Members {size:2, ver:2} [Member [...] this, Member [...]]
 docker-compose ps -a
 ```
 
-**Note**: `unhealthy` status on runtimes is expected. The health endpoint requires authentication which Docker health check doesn't provide. The application works correctly.
+**Note**: Runtimes should show `(healthy)` after ~2 minutes. The healthcheck uses `curl -u monitoring:password` against `/bonita/healthz`.
 
 ## Failover Testing
 
@@ -138,7 +138,7 @@ docker-compose restart bonita-runtime-2
 Copy `bonita-runtime-2` section as `bonita-runtime-3`:
 ```yaml
 bonita-runtime-3:
-  image: ${BONITA_IMAGE_REPOSITORY:-bonitasoft.jfrog.io/docker/bonita-subscription}:${BONITA_IMAGE_TAG:-10.2.3}
+  image: ${BONITA_IMAGE_REPOSITORY:-bonitasoft.jfrog.io/docker/bonita-subscription}:${BONITA_IMAGE_TAG:-2025.2-u3}
   container_name: bonita-runtime-3
   # ... same config as runtime-2
   environment:
@@ -221,12 +221,17 @@ docker stats bonita-runtime-1 bonita-runtime-2
 
 ### Health Check Shows Unhealthy
 
-This is **expected behavior**. The `/bonita/healthz` endpoint requires authentication. Docker's health check returns 401 (Unauthorized), causing "unhealthy" status.
+The healthcheck uses `curl -f -u $MONITORING_USERNAME:$MONITORING_PASSWORD http://localhost:8080/bonita/healthz`. If it fails, verify:
 
-The application works correctly. Verify via:
 ```bash
-curl -I http://localhost/bonita/login.jsp  # Should return 200
+# Test credentials manually
+docker-compose exec bonita-runtime-1 \
+  curl -s -o /dev/null -w "%{http_code}" \
+  -u monitoring:myMonitoringSecret http://localhost:8080/bonita/healthz
+# Expected: 200
 ```
+
+If the portal responds but healthcheck still fails, verify the `MONITORING_USERNAME` / `MONITORING_PASSWORD` values in `.env`.
 
 ## Performance Tuning
 
@@ -274,4 +279,4 @@ Recommended per runtime instance:
 
 ---
 
-**Last Updated**: December 2024
+**Last Updated**: February 2026

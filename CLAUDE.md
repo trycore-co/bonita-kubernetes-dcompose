@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Deployment configurations for Bonitasoft Platform (version 10.2/2024.3) with two deployment options:
+Deployment configurations for Bonitasoft Platform (version 2025.2) with two deployment options:
 
 1. **Kubernetes/Helm** (`helm/`): Production-ready Helm charts
 2. **Docker Compose** (`docker-compose/`): HA deployment for development/testing
@@ -21,9 +21,9 @@ UI Proxy (NGINX) ───┤                       │ (Hazelcast 5701)
 
 **Components:**
 - **PostgreSQL 16.4**: Two databases - `bonita` (bonitauser) and `bizdata` (bizuser)
-- **Bonita Runtime 10.2.3**: BPM engine with Hazelcast clustering (port 8080, 5701)
-- **UI Builder 1.3.0**: Low-code UI development based on Appsmith
-- **UI Proxy 1.3.0**: NGINX reverse proxy and load balancer (port 80)
+- **Bonita Runtime 2025.2-u3**: BPM engine with Hazelcast clustering (port 8080, 5701)
+- **UI Builder 1.3.9**: Low-code UI development based on Appsmith (internal port 8090)
+- **UI Proxy 1.3.9**: NGINX reverse proxy and load balancer (external port 80, internal 8082)
 
 ## Common Commands
 
@@ -99,7 +99,7 @@ kubectl delete ns bonita
 
 - **License Required**: Bonita Enterprise requires a valid subscription license (`license.lic`)
 - **Cluster Mode**: Set `CLUSTER_MODE=true` in `.env` for HA with multiple runtime instances
-- **Health Checks**: Runtime health checks require authentication; "unhealthy" status may be false positive if the endpoint returns 401
+- **Health Checks**: Healthcheck uses `curl -u user:pass` format. Runtime should show `healthy` after startup (~2 min). Previous versions used Base64 header substitution which failed in `CMD-SHELL` context.
 - **Cross-Platform**: `.gitattributes` ensures shell scripts maintain Unix line endings (LF) on all platforms
 - **NGINX Config**: When changing runtime instances, update both `docker-compose.yml` AND `nginx-config/nginx.conf.template`
 - **Default Credentials**: admin / myAdminSecret (change for production)

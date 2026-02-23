@@ -6,7 +6,7 @@ Get Bonita HA cluster up and running in 5 minutes.
 
 - Docker Desktop or Docker Engine with Compose
 - 8GB RAM available
-- Ports 80, 8081, 5435 available
+- Ports 80, 8081, 5432 available
 - Access to Bonitasoft Docker registry
 - Valid Bonita license file
 
@@ -80,7 +80,7 @@ docker-compose ps -a
 
 All services should show `Up`.
 
-**Note**: `unhealthy` status on runtimes is expected due to authentication requirements on health endpoint.
+**Note**: Runtimes should show `(healthy)` after ~2 minutes. If they show `unhealthy`, verify the `MONITORING_USERNAME` and `MONITORING_PASSWORD` variables are set correctly.
 
 ## Quick Commands
 
@@ -144,11 +144,12 @@ Mismatch between `docker-compose.yml` and `nginx-config/nginx.conf.template`. En
 
 ### UI services stuck in "Created" state
 
-The ui-builder and ui-proxy services depend on bonita-runtime-1 healthcheck. Since the healthcheck requires authentication, it may report "unhealthy" even when the runtime is working correctly.
+The ui-builder depends on `bonita-runtime-1` being `healthy`. If the runtime healthcheck fails, ui-builder and ui-proxy will not start automatically.
 
-**Solution**: Start UI services manually bypassing the dependency:
+**Solution**: Verify the runtime is healthy first, then start UI services:
 
 ```bash
+docker-compose ps bonita-runtime-1  # Should show (healthy)
 docker-compose up -d --no-deps ui-builder ui-proxy
 ```
 
@@ -159,23 +160,23 @@ docker-compose up -d --no-deps ui-builder ui-proxy
 │         Browser (http://localhost)      │
 └─────────────────┬───────────────────────┘
                   │
-        ┌─────────▼─────────┐
-        │   UI Proxy :80    │  (NGINX LB)
-        └────┬──────────┬───┘
-             │          │
-    ┌────────▼────┐  ┌──▼──────────────┐
-    │  UI Builder │  │ Bonita Runtime-1│ ←──┐
-    │    :8081    │  │     :8080       │    │ Hazelcast
-    └─────────────┘  └───────┬─────────┘    │ (5701)
-                             │  ┌───────────┘
-                             │  │ Bonita Runtime-2
-                             │  │     :8080
-                             │  └─────────────────┘
-                             ↓
-                    ┌────────▼──────┐
-                    │   PostgreSQL  │
-                    │     :5435     │
-                    └───────────────┘
+        ┌─────────▼──────────────┐
+        │  UI Proxy :80→:8082    │  (NGINX LB, internal 8082)
+        └────┬───────────────┬───┘
+             │               │
+    ┌────────▼────────┐  ┌───▼─────────────┐
+    │   UI Builder    │  │ Bonita Runtime-1 │ ←──┐
+    │  :8081→:8090    │  │     :8080        │    │ Hazelcast
+    └─────────────────┘  └────────┬─────────┘    │ (5701)
+                                  │  ┌───────────┘
+                                  │  │ Bonita Runtime-2
+                                  │  │     :8080
+                                  │  └──────────────────┘
+                                  ↓
+                         ┌────────▼──────┐
+                         │   PostgreSQL  │
+                         │     :5432     │
+                         └───────────────┘
 ```
 
 ## Default Credentials
@@ -199,4 +200,4 @@ docker-compose up -d --no-deps ui-builder ui-proxy
 
 ---
 
-**Last Updated**: December 2024
+**Last Updated**: February 2026

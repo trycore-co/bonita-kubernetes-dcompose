@@ -1,6 +1,6 @@
 # Bonita Platform - Docker Compose HA Deployment
 
-This directory contains a Docker Compose configuration for deploying Bonitasoft Platform (version 10.2) in High Availability mode with 2 runtime instances.
+This directory contains a Docker Compose configuration for deploying Bonitasoft Platform (version 2025.2) in High Availability mode with 2 runtime instances.
 
 ## Architecture Overview
 
@@ -17,10 +17,10 @@ The deployment consists of 5 containerized services:
 | Service | Image | Ports | Description |
 |---------|-------|-------|-------------|
 | postgres | `postgres:16.4` | 5435:5432 | Bonita + BDM databases |
-| bonita-runtime-1 | `bonita-subscription:10.2.3` | 8080, 5701 | Runtime instance 1 |
-| bonita-runtime-2 | `bonita-subscription:10.2.3` | 8080, 5701 | Runtime instance 2 |
-| ui-builder | `bonita-ui-builder:1.3.0` | 8081:80 | Low-code UI tool |
-| ui-proxy | `bonita-ui-proxy:1.3.0` | 80:80 | NGINX load balancer |
+| bonita-runtime-1 | `bonita-subscription:2025.2-u3` | 8080, 5701 | Runtime instance 1 |
+| bonita-runtime-2 | `bonita-subscription:2025.2-u3` | 8080, 5701 | Runtime instance 2 |
+| ui-builder | `bonita-ui-builder:1.3.9` | 8081:8090 | Low-code UI tool (Caddy on 8090) |
+| ui-proxy | `bonita-ui-proxy:1.3.9` | 80:8082 | NGINX load balancer (internal 8082) |
 
 ## Prerequisites
 
@@ -132,11 +132,11 @@ docker-compose up -d
 
 **Solution**: Ensure both files have the same runtime instances configured.
 
-### Health check shows "unhealthy" but app works
+### Health check shows "unhealthy"
 
-**Cause**: Health endpoint `/bonita/healthz` requires authentication. Docker health check returns 401.
+**Cause**: If using an older config, the healthcheck used Base64 header substitution inside single quotes, which prevented shell expansion.
 
-**Status**: This is expected behavior. The application works correctly.
+**Fix**: The healthcheck now uses `curl -f -u $${MONITORING_USERNAME}:$${MONITORING_PASSWORD}` which works correctly. Runtimes should show `(healthy)` after ~2 minutes of startup.
 
 ### Cluster not forming (size:1 instead of size:2)
 
@@ -174,4 +174,4 @@ docker-compose start bonita-runtime-1
 
 ---
 
-**Last Updated**: December 2024
+**Last Updated**: February 2026
