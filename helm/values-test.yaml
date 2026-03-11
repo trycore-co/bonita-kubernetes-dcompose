@@ -28,7 +28,7 @@ bonita:
         create: true
         name: bonita-test-sa
     image:
-        tag: 10.2.3
+        tag: 10.2.5
         pullSecrets:
         - name: imagepullsecret
     resources:

@@ -17,8 +17,8 @@ The deployment consists of 5 containerized services:
 | Service | Image | Ports | Description |
 |---------|-------|-------|-------------|
 | postgres | `postgres:16.4` | 5435:5432 | Bonita + BDM databases |
-| bonita-runtime-1 | `bonita-subscription:2025.2-u3` | 8080, 5701 | Runtime instance 1 |
-| bonita-runtime-2 | `bonita-subscription:2025.2-u3` | 8080, 5701 | Runtime instance 2 |
+| bonita-runtime-1 | `bonita-subscription:2025.2-u5` | 8080, 5701 | Runtime instance 1 |
+| bonita-runtime-2 | `bonita-subscription:2025.2-u5` | 8080, 5701 | Runtime instance 2 |
 | ui-builder | `bonita-ui-builder:1.3.9` | 8081:8090 | Low-code UI tool (Caddy on 8090) |
 | ui-proxy | `bonita-ui-proxy:1.3.9` | 80:8082 | NGINX load balancer (internal 8082) |
 

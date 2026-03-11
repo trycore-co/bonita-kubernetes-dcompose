@@ -138,7 +138,7 @@ docker-compose restart bonita-runtime-2
 Copy `bonita-runtime-2` section as `bonita-runtime-3`:
 ```yaml
 bonita-runtime-3:
-  image: ${BONITA_IMAGE_REPOSITORY:-bonitasoft.jfrog.io/docker/bonita-subscription}:${BONITA_IMAGE_TAG:-2025.2-u3}
+  image: ${BONITA_IMAGE_REPOSITORY:-bonitasoft.jfrog.io/docker/bonita-subscription}:${BONITA_IMAGE_TAG:-2025.2-u5}
   container_name: bonita-runtime-3
   # ... same config as runtime-2
   environment:

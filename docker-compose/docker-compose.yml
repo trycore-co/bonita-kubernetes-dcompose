@@ -22,7 +22,7 @@ services:
 
   # Bonita Runtime Engine - Instance 1 (HA Cluster)
   bonita-runtime-1:
-    image: ${BONITA_IMAGE_REPOSITORY:-bonitasoft.jfrog.io/docker/bonita-subscription}:${BONITA_IMAGE_TAG:-10.2.3}
+    image: ${BONITA_IMAGE_REPOSITORY:-bonitasoft.jfrog.io/docker/bonita-subscription}:${BONITA_IMAGE_TAG:-10.2.5}
     container_name: bonita-runtime-1
     depends_on:
       postgres:
@@ -113,7 +113,7 @@ services:
 
   # Bonita Runtime Engine - Instance 2 (HA Cluster)
   bonita-runtime-2:
-    image: ${BONITA_IMAGE_REPOSITORY:-bonitasoft.jfrog.io/docker/bonita-subscription}:${BONITA_IMAGE_TAG:-10.2.3}
+    image: ${BONITA_IMAGE_REPOSITORY:-bonitasoft.jfrog.io/docker/bonita-subscription}:${BONITA_IMAGE_TAG:-10.2.5}
     container_name: bonita-runtime-2
     depends_on:
       postgres:
