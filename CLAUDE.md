@@ -22,7 +22,7 @@ UI Proxy (NGINX) ───┤                       │ (Hazelcast 5701)
 **Components:**
 - **PostgreSQL 16.4**: Two databases - `bonita` (bonitauser) and `bizdata` (bizuser)
 - **Bonita Runtime 2025.2-u5**: BPM engine with Hazelcast clustering (port 8080, 5701)
-- **UI Builder 1.3.9**: Low-code UI development based on Appsmith (internal port 8090)
+- **UI Builder 1.3.11**: Low-code UI development based on Appsmith (internal port 8090)
 - **UI Proxy 1.3.9**: NGINX reverse proxy and load balancer (external port 80, internal 8082)
 
 ## Common Commands
