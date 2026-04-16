@@ -51,18 +51,11 @@ http {
         '' $host;
     }
 
-    # map directive: Maps scheme to standard port as fallback when X-Forwarded-Port is not present.
-    # This avoids leaking the internal NGINX listen port (e.g. 8082) into redirect URLs.
-    map $scheme $forwarded_port_default {
-        https 443;
-        default 80;
-    }
-
     # map directive: Maps the original X-Forwarded-Port header to a new variable.
-    # Falls back to standard port based on scheme (80/443) instead of internal $server_port.
+    # the current $server_port is used when the header is not present
     map $http_x_forwarded_port $preserve_x_forwarded_port {
         default $http_x_forwarded_port;
-        '' $forwarded_port_default;
+        '' $server_port;
     }
 
     # map directive: Maps the original request URI to a new variable, intended to be URL-encoded.
@@ -108,9 +101,10 @@ http {
         ip_hash;
 
         # Backend server 1
-        server bonita-runtime-1:8080 max_fails=3 fail_timeout=30s;
+        server ${BONITA_HOST}:${BONITA_PORT} max_fails=3 fail_timeout=30s;
 
         # Backend server 2
+        # ITTI Definition
         # server bonita-runtime-2:8080 max_fails=3 fail_timeout=30s;
 
         # Health check parameters:
@@ -314,7 +308,7 @@ http {
         # If we redirect directly to the original URL, React Router takes over client-side and
         # the backend session-creation step at /user/login is never reached.
         location @redirect_to_login {
-            return 302 $preserve_x_forwarded_proto://$preserve_x_forwarded_host/bonita/apps/sendRedirect?redirectUrl=/user/login?redirectUrl=$encoded_uri;
+            return 302 /bonita/apps/sendRedirect?redirectUrl=/user/login?redirectUrl=$encoded_uri;
         }
 
         location = /5xx.html {

@@ -30,7 +30,7 @@ services:
     # Note: Ports not published externally in HA mode - access via UI Proxy
     # Uncomment for direct access during troubleshooting:
     # ports:
-    #   - "8081:8080"
+    #   - "8082:8080"
     environment:
       # Timezone
       - TZ=${TIMEZONE:-Europe/Paris}
@@ -217,11 +217,17 @@ services:
       # Internal port for Caddy (avoids conflict with port 80)
       - UIB_INTERNAL_PORT=8090
 
-      # Bonita API connection - MUST use UI Proxy for cookie path compatibility
-      # Cookies are created with Path=/ through proxy, so internal calls must also go through proxy
-      - BONITA_API_URL=http://ui-proxy:8082/bonita/API
+      # Bonita API connection - must call Bonita runtime DIRECTLY (not via proxy)
+      # The ui-proxy marks /bonita/API/system/session as 'internal' (NGINX auth_request target).
+      # External HTTP clients (this backend) get 404 when calling through the proxy.
+      # Cookie path (Path=/ vs Path=/bonita) only matters for browser-facing responses, not backend calls.
+      - BONITA_API_URL=http://bonita-runtime-1:8080/bonita/API
       - BONITA_HEALTHCHECK_USER=${MONITORING_USERNAME:-monitoring}
       - BONITA_HEALTHCHECK_PASSWORD=${MONITORING_PASSWORD:-myMonitoringSecret}
+
+      # Encryption keys - required for Appsmith session management
+      - APPSMITH_ENCRYPTION_PASSWORD=${APPSMITH_ENCRYPTION_PASSWORD}
+      - APPSMITH_ENCRYPTION_SALT=${APPSMITH_ENCRYPTION_SALT}
 
       # Development mode
       - BONITA_DEV_MODE=${UI_BUILDER_DEV_MODE:-true}
